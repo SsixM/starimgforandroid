@@ -475,7 +475,9 @@ class MainViewModel(app: Context) : ViewModel() {
         val base = history ?: if (replace) chat.messages.dropLastWhile { !it.user }.dropLast(1) else chat.messages
         val title = if (base.isEmpty() && (chat.title == "Новый чат" || replace)) text.take(32).ifBlank { "Новый чат" } else chat.title
         val placeholder = ChatMessage("", user = false, timestamp = System.currentTimeMillis(), modelId = now.selectedModel)
-        val updated = chat.copy(title = title, messages = base + message + placeholder, draft = "")\n        _state.update { state -> state.copy(chats = state.chats.filterNot { it.id == id }.let { listOf(updated) + it }, currentId = id) }\n        viewModelScope.launch(Dispatchers.IO) { store.saveChat(updated) }
+        val updated = chat.copy(title = title, messages = base + message + placeholder, draft = "")
+        _state.update { state -> state.copy(chats = state.chats.filterNot { it.id == id }.let { listOf(updated) + it }, currentId = id) }
+        viewModelScope.launch(Dispatchers.IO) { store.saveChat(updated) }
         _state.update { it.copy(busy = true, error = null, acceptedSendId = it.acceptedSendId + 1) }
         val modelId = now.selectedModel
         val modelInfo = model(modelId)
@@ -510,10 +512,12 @@ class MainViewModel(app: Context) : ViewModel() {
             } catch (e: java.io.IOException) {
                 if (e.message?.contains("canceled", true) == true || e.message?.contains("cancelled", true) == true) return@launch
                 _state.update { state -> state.copy(chats = state.chats.map { c -> if (c.id == id) c.copy(messages = c.messages.dropLast(1)) else c }) }
-                snapshot.chats.firstOrNull { it.id == id }?.let { persist(it) }\n                _state.update { it.copy(error = explainFailure(e)) }
+                snapshot.chats.firstOrNull { it.id == id }?.let { persist(it) }
+                _state.update { it.copy(error = explainFailure(e)) }
             } catch (e: Throwable) {
                 _state.update { state -> state.copy(chats = state.chats.map { c -> if (c.id == id) c.copy(messages = c.messages.dropLast(1)) else c }) }
-                snapshot.chats.firstOrNull { it.id == id }?.let { persist(it) }\n                _state.update { it.copy(error = explainFailure(e)) }
+                snapshot.chats.firstOrNull { it.id == id }?.let { persist(it) }
+                _state.update { it.copy(error = explainFailure(e)) }
             } finally {
                 _state.update { it.copy(busy = false) }
                 recountContext()
@@ -558,8 +562,8 @@ private fun ChatMessage.withBranch(previous: ChatMessage?): ChatMessage {
             version?.timestamp ?: previous.timestamp,
             version?.usageAvailable ?: previous.usageAvailable,
             version?.requestAttemptId ?: previous.requestAttemptId,
-            version?.usageSource ?: previous.usageSource,
-            version?.serverRequestId ?: previous.serverRequestId
+            version?.serverRequestId ?: previous.serverRequestId,
+            version?.usageSource ?: previous.usageSource
         )
     }
     return copy(versions = older, activeVersion = older.size)
@@ -571,7 +575,8 @@ private fun ChatMessage.withTelemetry(logs: List<UsageLog>, logsById: Map<String
         val log = request?.let(logsById::get)?.takeIf { claimed.add(it.requestId ?: "") }
             ?: if (!attemptFallback) null else logs.filter { it.requestId != null && it.requestId !in claimed && it.model == model && (timestamp == 0L || kotlin.math.abs(timestamp - runCatching { java.time.Instant.parse(it.createdAt).toEpochMilli() }.getOrDefault(Long.MIN_VALUE)) < 120_000) }.singleOrNull()?.also { claimed.add(it.requestId!!) }
             ?: return null
-        return MessageVersion("", log.inputTokens, log.outputTokens, log.inputTokens + log.outputTokens, coefficient, outputCoefficient, calculateUsageCost(TokenUsage(log.inputTokens, log.outputTokens, cachedInput = log.cachedTokens), ModelPricing(coefficient, outputCoefficient)).rubles, model, timestamp, true, attempt, ru.starimg.ai.data.model.UsageSource.TELEMETRY, log.requestId)
+        val matched = log ?: return null
+        return MessageVersion("", matched.inputTokens, matched.outputTokens, matched.inputTokens + matched.outputTokens, coefficient, outputCoefficient, calculateUsageCost(TokenUsage(matched.inputTokens, matched.outputTokens, cachedInput = matched.cachedTokens), ModelPricing(coefficient, outputCoefficient)).rubles, model, timestamp, true, attempt, matched.requestId, ru.starimg.ai.data.model.UsageSource.TELEMETRY)
     }
     val enrichedVersions = versions.map { v -> enrich(v.requestAttemptId, v.serverRequestId, v.modelId, v.inputTokens, v.outputTokens, v.totalTokens, v.usageAvailable, v.usageSource, v.timestamp, v.costRubles, v.coefficient, v.outputCoefficient, true)?.let { v.copy(inputTokens = it.inputTokens, outputTokens = it.outputTokens, totalTokens = it.totalTokens, costRubles = it.costRubles, usageAvailable = true, usageSource = it.usageSource, serverRequestId = it.serverRequestId) } ?: v }
     val enrichedSelf = enrich(requestAttemptId, serverRequestId, modelId, inputTokens, outputTokens, totalTokens, usageAvailable, usageSource, timestamp, costRubles, coefficient, outputCoefficient, true)

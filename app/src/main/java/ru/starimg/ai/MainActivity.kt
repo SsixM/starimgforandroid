@@ -117,7 +117,7 @@ private fun Navigation(vm: MainViewModel, state: ru.starimg.ai.ui.AppState) {
             else (slideInVertically(tween(280)) { it / 5 } + fadeIn(tween(280))) togetherWith (slideOutVertically(tween(240)) { it / 6 } + fadeOut(tween(200)))
         }, label = "screen") { current ->
             when (current) {
-                Screen.Chat -> ChatScreen(vm, state, { screen = Screen.Chats }, { modelSheet = true }, { screen = Screen.Library })
+                Screen.Chat -> ChatScreen(vm, state, { screen = Screen.Chats }, { modelSheet = true }, { screen = Screen.Library }, { screen = Screen.Settings })
                 Screen.Chats -> ChatsScreen(vm, state, { screen = Screen.Chat }, { screen = Screen.Stats }, { screen = Screen.Settings }, { screen = Screen.Library }, { screen = Screen.News })
                 Screen.Models -> ModelsScreen(vm, state) { screen = Screen.Chat }
                 Screen.Library -> LibraryScreen(vm, state, { screen = Screen.Chat }) { body -> vm.send(body); screen = Screen.Chat }

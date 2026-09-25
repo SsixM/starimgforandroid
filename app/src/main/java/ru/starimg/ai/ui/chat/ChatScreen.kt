@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -62,6 +63,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -113,15 +115,17 @@ import ru.starimg.ai.ui.startOfDay
 import ru.starimg.ai.ui.theme.LocalStarPalette
 import ru.starimg.ai.ui.theme.StarDim
 import java.io.ByteArrayOutputStream
+import java.io.File
+import androidx.core.content.FileProvider
 
 @Composable
-fun ChatScreen(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit, onOpenModels: () -> Unit, onOpenAgents: () -> Unit) {
-    ChatBody(vm, state, onOpenChats, onOpenModels, onOpenAgents)
+fun ChatScreen(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit, onOpenModels: () -> Unit, onOpenAgents: () -> Unit, onOpenSettings: () -> Unit) {
+    ChatBody(vm, state, onOpenChats, onOpenModels, onOpenAgents, onOpenSettings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit, onOpenModels: () -> Unit, onOpenAgents: () -> Unit) {
+private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit, onOpenModels: () -> Unit, onOpenAgents: () -> Unit, onOpenSettings: () -> Unit) {
     val palette = LocalStarPalette.current
     var text by remember(state.currentId) { mutableStateOf(vm.currentChat?.draft ?: "") }
     var photos by remember { mutableStateOf<List<Attachment>>(emptyList()) }
@@ -140,15 +144,31 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         photos = (photos + uris.mapNotNull { imagePayload(context, it) }).take(8)
     }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { if (it != null) photos = (photos + imagePayload(it)).take(8) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) camera.launch(null) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraUri
+        if (ok && uri != null) imagePayload(context, uri)?.let { photos = (photos + it).take(8) }
+    }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val file = File.createTempFile("starimg-camera-", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            cameraUri = uri
+            camera.launch(uri)
+        }
+    }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { heard ->
             text = (text.trimEnd() + " " + heard).trim()
         }
     }
     fun takePhoto() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera.launch(null)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val file = File.createTempFile("starimg-camera-", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            cameraUri = uri
+            camera.launch(uri)
+        }
         else permission.launch(Manifest.permission.CAMERA)
     }
     fun dictate() {
@@ -180,11 +200,12 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
                 IconButton(onOpenChats) { Icon(Icons.Default.History, "Чаты") }
                 Column(Modifier.weight(1f)) {
                     Text(vm.currentChat?.title ?: "Новый чат", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (state.busy) "Печатает…" else "сегодня ${formatRubles(today)}", color = palette.faint, style = MaterialTheme.typography.labelMedium)
+                    TextButton(onClick = onOpenSettings) { Text(if (state.busy) "Печатает…" else "сегодня ${formatRubles(today)} · расходы", color = palette.faint, style = MaterialTheme.typography.labelMedium) }
                 }
                 Surface(onClick = onOpenModels, shape = RoundedCornerShape(StarDim.radiusXl), color = palette.raised) {
                     Text(model.name, modifier = Modifier.padding(horizontal = StarDim.md, vertical = StarDim.sm), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = palette.accent)
                 }
+                IconButton(onOpenSettings) { Icon(Icons.Default.Settings, "Настройки") }
                 Box {
                     IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Ещё") }
                     DropdownMenu(menu, { menu = false }) {
@@ -458,13 +479,16 @@ private fun clipboardImage(context: Context): Attachment? {
 }
 
 private fun imagePayload(bitmap: Bitmap): Attachment {
-    val scale = minOf(1f, 1600f / maxOf(bitmap.width, bitmap.height))
-    val scaled = if (scale < 1f) Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true) else bitmap
     val out = ByteArrayOutputStream()
-    scaled.compress(Bitmap.CompressFormat.JPEG, 82, out)
-    if (scaled !== bitmap) scaled.recycle()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
     return Attachment(Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP), "image/jpeg")
 }
 
 private fun imagePayload(context: Context, uri: Uri): Attachment? =
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.let(::imagePayload)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        val bytes = input.readBytes()
+        if (bytes.isEmpty()) null else {
+            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+            Attachment(Base64.encodeToString(bytes, Base64.NO_WRAP), mime)
+        }
+    }

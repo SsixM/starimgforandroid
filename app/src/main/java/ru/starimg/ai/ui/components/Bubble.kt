@@ -255,7 +255,8 @@ private fun UsageDialog(message: ChatMessage, version: MessageVersion?, close: (
             }
         },
         confirmButton = { TextButton(close) { Text("Закрыть") } }
-                Detail("Стоимость", if (available) formatRubles(version?.costRubles ?: message.costRubles) else "Нет данных")
+    )
+}
 
 @Composable
 private fun Detail(label: String, value: String) {

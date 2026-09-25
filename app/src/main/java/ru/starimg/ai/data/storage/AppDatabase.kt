@@ -233,8 +233,7 @@ fun MessageEntity.toMessage(): ChatMessage {
     return ChatMessage(
         text, user, image, mime, photos, error, inputTokens, outputTokens, totalTokens,
         coefficient, outputCoefficient, costRubles, modelId, timestamp, usageAvailable,
-        requestAttemptId, runCatching { ru.starimg.ai.data.model.UsageSource.valueOf(usageSource) }.getOrDefault(ru.starimg.ai.data.model.UsageSource.UNKNOWN), history, activeVersion,
-        serverRequestId = serverRequestId
+        requestAttemptId, serverRequestId, runCatching { ru.starimg.ai.data.model.UsageSource.valueOf(usageSource) }.getOrDefault(ru.starimg.ai.data.model.UsageSource.UNKNOWN), history, activeVersion
     )
 }
 

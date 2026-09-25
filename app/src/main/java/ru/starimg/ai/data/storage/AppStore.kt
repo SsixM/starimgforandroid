@@ -136,6 +136,8 @@ class AppStore(context: Context) {
 
     fun importSettings(raw: String): Boolean = runCatching {
         val dump = json.decodeFromString<SettingsDump>(raw)
+        // Endpoint is intentionally fixed to Starimg even when importing older exports.
+        endpoint = "https://ai.starimg.ru/v1"
         currency = dump.currency; spendLimit = dump.spendLimit
         themeMode = dump.themeMode; textScale = dump.textScale; favoriteModels = dump.favorites.toSet()
     }.isSuccess

@@ -80,7 +80,7 @@ fun SettingsScreen(vm: MainViewModel, state: AppState, onBack: () -> Unit) {
                 OutlinedTextField(limit, { limit = it; saved = false }, Modifier.fillMaxWidth(), label = { Text("Лимит за месяц, пусто — без лимита") }, singleLine = true)
                 Text("1 000 000 эквивалентных токенов стоит 4 ₽.", color = palette.faint, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = StarDim.xs))
             }
-            Button({ vm.saveSettings(key, state.endpoint, money, limit, theme, scale, access); vm.refreshModels(); saved = true }, Modifier.fillMaxWidth()) {
+            Button({ vm.saveSettings(key, "https://ai.starimg.ru/v1", money, limit, theme, scale, access); vm.refreshModels(); saved = true }, Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Save, null); Text(if (saved) "  Сохранено" else "  Сохранить")
             }
             SectionCard(Icons.Default.Storage, "Данные") {
