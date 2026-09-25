@@ -1,4 +1,4 @@
-package ru.starimg.ai.ui.chat
+﻿package ru.starimg.ai.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -62,6 +62,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import ru.starimg.ai.data.model.ChatSession
 import ru.starimg.ai.ui.AppState
 import ru.starimg.ai.ui.MainViewModel
@@ -208,11 +211,9 @@ private fun ChatRow(
                     if (chat.pinned) Icon(Icons.Outlined.PushPin, null, Modifier.size(14.dp).padding(end = StarDim.xs), tint = palette.accent)
                     Text(chat.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) palette.accent else palette.assistant)
                 }
-                val meta = buildList {
-                    if (chat.folder.isNotBlank()) add(chat.folder)
-                    addAll(chat.tags.map { "#$it" })
-                    add("${chat.messages.size} сообщ.")
-                }.joinToString(" · ")
+                val lastMessageAt = chat.messages.lastOrNull()?.timestamp?.takeIf { it > 0L }
+                val lastMessageDate = lastMessageAt?.let { SimpleDateFormat("d MMM yyyy", Locale("ru")).format(Date(it)) } ?: "Нет сообщений"
+                val meta = "${chat.messages.size} сообщ. · $lastMessageDate"
                 Text(meta, style = MaterialTheme.typography.labelMedium, color = palette.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box {
@@ -238,3 +239,5 @@ private fun FooterRow(icon: ImageVector, label: String, onClick: () -> Unit) {
         Text(label, Modifier.padding(start = StarDim.lg))
     }
 }
+
+

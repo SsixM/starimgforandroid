@@ -1,4 +1,4 @@
-package ru.starimg.ai.ui.chat
+﻿package ru.starimg.ai.ui.chat
 
 import android.Manifest
 import android.content.Context
@@ -140,7 +140,7 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
     val context = LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scroll = rememberLazyListState()
-    val model = vm.model(state.selectedModel) ?: Catalog.models.first()
+    val model = vm.model(state.selectedModel) ?: Catalog.models.firstOrNull() ?: AiModel(state.selectedModel, state.selectedModel.ifBlank { "Модель не выбрана" }, "", "", ModelPricing(1.0, 1.0))
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         photos = (photos + uris.mapNotNull { imagePayload(context, it) }).take(8)
     }
@@ -193,18 +193,15 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
     // never yanks the list out from under someone reading earlier messages.
     val pinned by remember { derivedStateOf { !scroll.canScrollForward } }
     LaunchedEffect(vm.messages.size, state.busy) { if (pinned && vm.messages.isNotEmpty()) runCatching { scroll.animateScrollToItem(vm.messages.lastIndex) } }
-    val today = vm.costSince(startOfDay())
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(palette.glow.copy(alpha = .16f), palette.bg), endY = 520f)).statusBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = StarDim.sm, vertical = StarDim.xs), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onOpenChats) { Icon(Icons.Default.History, "Чаты") }
                 Column(Modifier.weight(1f)) {
                     Text(vm.currentChat?.title ?: "Новый чат", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    TextButton(onClick = onOpenSettings) { Text(if (state.busy) "Печатает…" else "сегодня ${formatRubles(today)} · расходы", color = palette.faint, style = MaterialTheme.typography.labelMedium) }
+                    Text(if (state.busy) "Печатает…" else "${vm.messages.size} сообщ.", color = palette.faint, style = MaterialTheme.typography.labelMedium)
                 }
-                Surface(onClick = onOpenModels, shape = RoundedCornerShape(StarDim.radiusXl), color = palette.raised) {
-                    Text(model.name, modifier = Modifier.padding(horizontal = StarDim.md, vertical = StarDim.sm), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = palette.accent)
-                }
+                IconButton(onOpenModels) { Icon(Icons.Default.AutoAwesome, "Модель") }
                 IconButton(onOpenSettings) { Icon(Icons.Default.Settings, "Настройки") }
                 Box {
                     IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Ещё") }
@@ -215,17 +212,6 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
                         DropdownMenuItem(text = { Text("Экспорт в Markdown") }, onClick = { menu = false; shareText(context, vm.chatAsMarkdown()) })
                         DropdownMenuItem(text = { Text("Экспорт в текст") }, onClick = { menu = false; shareText(context, vm.chatAsText()) })
                     }
-                }
-            }
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = StarDim.md, vertical = StarDim.xs),
-                shape = RoundedCornerShape(StarDim.radius), color = palette.raised
-            ) {
-                Column(Modifier.padding(horizontal = StarDim.md, vertical = StarDim.sm), verticalArrangement = Arrangement.spacedBy(StarDim.xxs)) {
-                    Text("Модель · ${model.name}", style = MaterialTheme.typography.labelMedium, color = palette.assistant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("Reasoning · ${state.reasoningMode.ifBlank { "выключен" }}", style = MaterialTheme.typography.labelSmall, color = palette.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val instructions = listOf(state.baseSystemPrompt, state.systemPrompt).count { it.isNotBlank() }
-                    Text("Инструкции · ${when (instructions) { 0 -> "нет"; 1 -> "активна 1"; else -> "активны $instructions" }}", style = MaterialTheme.typography.labelSmall, color = palette.faint)
                 }
             }
             if (state.contextDropped > 0) {
@@ -396,11 +382,6 @@ private fun Composer(
                 else FilledIconButton({ if (pricey) confirm = true else send() }, enabled = canSend, modifier = Modifier.size(44.dp)) { Icon(Icons.Default.ArrowUpward, "Отправить") }
             }
         }
-        Column(Modifier.fillMaxWidth().padding(start = StarDim.lg, top = StarDim.xs, end = StarDim.sm)) {
-            Text("Предварительная оценка · около ${formatRubles(estimate).replace("₽", currency)}", color = palette.faint, style = MaterialTheme.typography.labelMedium)
-            Text("Расчёт по длине текста и тарифу модели; итог зависит от ответа. В статистику попадут только данные сервера." + if (photos.isNotEmpty()) " Фото: ${photos.size}." else "", color = palette.faint, style = MaterialTheme.typography.labelSmall)
-            Text("Вход ${formatCoefficient(model.pricing.inputCoefficient)} · выход ${formatCoefficient(model.pricing.outputCoefficient)}", color = palette.faint, style = MaterialTheme.typography.labelSmall)
-        }
     }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -492,3 +473,5 @@ private fun imagePayload(context: Context, uri: Uri): Attachment? =
             Attachment(Base64.encodeToString(bytes, Base64.NO_WRAP), mime)
         }
     }
+
+
