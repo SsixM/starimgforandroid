@@ -9,6 +9,8 @@ import ru.starimg.ai.data.model.AiModel
 import ru.starimg.ai.data.model.Agent
 import ru.starimg.ai.data.model.ChatSession
 import ru.starimg.ai.data.model.Prompt
+import ru.starimg.ai.data.model.SiteNews
+import ru.starimg.ai.data.api.parseNews
 
 /** SharedPreferences store. Keys and schema match the previous single-file app. */
 class AppStore(context: Context) {
@@ -61,6 +63,13 @@ class AppStore(context: Context) {
     }
 
     suspend fun saveAgents(agents: List<Agent>) = db.library().replaceAgents(agents.map { it.toEntity() })
+
+    suspend fun loadNews(): List<SiteNews> = db.news().published().mapNotNull { runCatching { parseNews(it.payload).first() }.getOrNull() }
+
+    suspend fun saveNews(items: List<SiteNews>) {
+        if (items.isEmpty()) return
+        db.news().replaceNews(items.map { NewsEntity(it.id, it.status, json.encodeToString(listOf(it)), System.currentTimeMillis()) })
+    }
 
     var modelId: String
         get() = prefs.getString("model", "") ?: ""

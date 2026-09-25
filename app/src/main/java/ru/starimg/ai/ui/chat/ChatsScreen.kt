@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
@@ -70,7 +71,7 @@ import ru.starimg.ai.ui.theme.StarDim
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatsScreen(vm: MainViewModel, state: AppState, onBack: () -> Unit, onStats: () -> Unit, onSettings: () -> Unit, onLibrary: () -> Unit) {
+fun ChatsScreen(vm: MainViewModel, state: AppState, onBack: () -> Unit, onStats: () -> Unit, onSettings: () -> Unit, onLibrary: () -> Unit, onNews: () -> Unit) {
     val palette = LocalStarPalette.current
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
@@ -120,6 +121,7 @@ fun ChatsScreen(vm: MainViewModel, state: AppState, onBack: () -> Unit, onStats:
                 HorizontalDivider(Modifier.padding(vertical = StarDim.sm), color = palette.line)
                 FooterRow(Icons.Default.MenuBook, "Библиотека", onLibrary)
                 FooterRow(Icons.Default.BarChart, "Расходы", onStats)
+                FooterRow(Icons.Default.Newspaper, "Новости", onNews)
                 FooterRow(Icons.Default.Settings, "Настройки", onSettings)
             }
         }

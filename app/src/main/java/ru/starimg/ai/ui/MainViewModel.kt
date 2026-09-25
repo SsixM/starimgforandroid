@@ -29,6 +29,7 @@ import ru.starimg.ai.data.storage.AppStore
 import java.util.Calendar
 import ru.starimg.ai.data.model.AccountBalance
 import ru.starimg.ai.data.model.UsageLog
+import ru.starimg.ai.data.model.SiteNews
 import java.util.UUID
 
 /** Everything the screens render. One snapshot, so a frame never mixes old and new state. */
@@ -62,7 +63,9 @@ data class AppState(
     val balance: AccountBalance? = null,
     val usageLogs: List<UsageLog> = emptyList(),
     val telemetryError: String? = null,
-    val telemetryLoading: Boolean = false
+    val telemetryLoading: Boolean = false,
+    val news: List<SiteNews> = emptyList(), val newsLoading: Boolean = false,
+    val newsError: String? = null, val newsUpdatedAt: Long? = null
 )
 
 class MainViewModel(app: Context) : ViewModel() {
@@ -77,6 +80,7 @@ class MainViewModel(app: Context) : ViewModel() {
     private var request: Job? = null
     private var modelRefresh: Job? = null
     private var lastModelRefreshAt = 0L
+    private var newsRefresh: Job? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -240,6 +244,34 @@ class MainViewModel(app: Context) : ViewModel() {
                 .onFailure { failure -> _state.update { it.copy(telemetryError = failure.message ?: "Не удалось получить баланс.", telemetryLoading = false) } }
         }
     }
+
+    fun loadNewsCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cached = store.loadNews()
+            if (cached.isNotEmpty()) _state.update { if (it.news.isEmpty()) it.copy(news = cached) else it }
+        }
+    }
+
+    fun refreshNews() {
+        if (newsRefresh?.isActive == true) return
+        newsRefresh = viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(newsLoading = true, newsError = null) }
+            try {
+                val loaded = api.loadNews()
+                if (loaded.isEmpty()) {
+                    _state.update { it.copy(newsLoading = false, newsError = "Опубликованных новостей пока нет.") }
+                } else {
+                    store.saveNews(loaded)
+                    _state.update { it.copy(news = loaded, newsLoading = false, newsError = null, newsUpdatedAt = System.currentTimeMillis()) }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Throwable) {
+                _state.update { it.copy(newsLoading = false, newsError = failure.message ?: "Не удалось загрузить новости.") }
+            }
+        }
+    }
+
+    fun cancelNewsRefresh() { newsRefresh?.cancel(); newsRefresh = null; api.cancelNews() }
 
     fun refreshModels(force: Boolean = true) {
         val now = System.currentTimeMillis()

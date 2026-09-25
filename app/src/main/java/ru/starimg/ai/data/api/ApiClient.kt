@@ -31,10 +31,26 @@ class ApiClient {
         .readTimeout(120, TimeUnit.SECONDS)
         .build()
 
+    private val newsHttp = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(25, TimeUnit.SECONDS).followRedirects(false).build()
+    @Volatile private var newsCall: Call? = null
+
     @Volatile private var current: Call? = null
 
     /** Aborts the request in flight so the user can send again. */
     fun cancel() { current?.cancel() }
+
+    fun loadNews(): List<ru.starimg.ai.data.model.SiteNews> {
+        val request = Request.Builder().url("https://ai.starimg.ru/news/api").get().build()
+        val call = newsHttp.newCall(request)
+        newsCall = call
+        try { call.execute().use { response ->
+            if (!response.isSuccessful) error("Новости недоступны (${response.code}).")
+            return parseNewsResponse(response.body?.string().orEmpty()).filter { it.status.equals("published", true) }
+        } } finally { if (newsCall === call) newsCall = null }
+    }
+    fun cancelNews() { newsCall?.cancel() }
 
     /**
      * Streams a reply. [onDelta] is called on the calling thread for every chunk of text.

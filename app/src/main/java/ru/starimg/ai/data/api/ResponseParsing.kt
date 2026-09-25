@@ -33,12 +33,13 @@ fun parseNews(raw: String): List<SiteNews> {
         ?: return emptyList()
     return entries.mapNotNull { element -> runCatching {
         val item = element.jsonObject
-        val id = item.string("id") ?: return@runCatching null
+        val id = item.string("id") ?: item.longValue("id")?.toString() ?: return@runCatching null
         SiteNews(id, item.string("status") ?: "unknown", item.string("tag"), item.string("tagLabel"),
             item.string("tagColor"), item.string("title") ?: "", item.string("titleEn"),
             item.string("text") ?: "", item.string("textEn"),
             item["imgs"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList(),
-            item["pinned"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false)
+            item["pinned"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false,
+            item.string("date") ?: item.string("publishedAt") ?: item.string("createdAt"))
     }.getOrNull() }
 }
 
@@ -186,7 +187,7 @@ fun explainFailure(error: Throwable): String {
 }
 
 private fun JsonObject.longValue(vararg names: String): Long? =
-    names.firstNotNullOfOrNull { name -> this[name]?.jsonPrimitive?.longOrNull }
+    names.firstNotNullOfOrNull { name -> this[name]?.jsonPrimitive?.longOrNull ?: this[name]?.jsonPrimitive?.contentOrNull?.toLongOrNull() }
 
 private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
 

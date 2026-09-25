@@ -163,10 +163,26 @@ interface LibraryDao {
     suspend fun replaceAgents(agents: List<AgentEntity>) { deleteAgents(); insertAgents(agents) }
 }
 
+@Dao
+interface NewsDao {
+    @Query("SELECT * FROM site_news WHERE status = 'published' ORDER BY cachedAt DESC")
+    suspend fun published(): List<NewsEntity>
+
+    @Query("DELETE FROM site_news")
+    suspend fun clearNews()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNews(items: List<NewsEntity>)
+
+    @Transaction
+    suspend fun replaceNews(items: List<NewsEntity>) { clearNews(); insertNews(items) }
+}
+
 @Database(entities = [ChatEntity::class, MessageEntity::class, PromptEntity::class, AgentEntity::class, NewsEntity::class, ModelCapabilityEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chats(): ChatDao
     abstract fun library(): LibraryDao
+    abstract fun news(): NewsDao
 
     companion object {
         /** Adds folders, tags, drafts and the JSON columns without touching existing rows. */

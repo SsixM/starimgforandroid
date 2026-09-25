@@ -68,6 +68,7 @@ import ru.starimg.ai.ui.models.ModelsScreen
 import ru.starimg.ai.ui.prompts.LibraryScreen
 import ru.starimg.ai.ui.settings.SettingsScreen
 import ru.starimg.ai.ui.stats.StatsScreen
+import ru.starimg.ai.ui.news.NewsScreen
 import ru.starimg.ai.ui.theme.LocalStarPalette
 import ru.starimg.ai.ui.theme.StarDim
 import ru.starimg.ai.ui.theme.StarTheme
@@ -79,7 +80,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, Chats, Models, Library, Stats, Settings }
+private enum class Screen { Chat, Chats, Models, Library, Stats, Settings, News }
 
 @Composable
 private fun App() {
@@ -111,11 +112,12 @@ private fun Navigation(vm: MainViewModel, state: ru.starimg.ai.ui.AppState) {
         }, label = "screen") { current ->
             when (current) {
                 Screen.Chat -> ChatScreen(vm, state, { screen = Screen.Chats }, { modelSheet = true }, { screen = Screen.Library })
-                Screen.Chats -> ChatsScreen(vm, state, { screen = Screen.Chat }, { screen = Screen.Stats }, { screen = Screen.Settings }, { screen = Screen.Library })
+                Screen.Chats -> ChatsScreen(vm, state, { screen = Screen.Chat }, { screen = Screen.Stats }, { screen = Screen.Settings }, { screen = Screen.Library }, { screen = Screen.News })
                 Screen.Models -> ModelsScreen(vm, state) { screen = Screen.Chat }
                 Screen.Library -> LibraryScreen(vm, state, { screen = Screen.Chat }) { body -> vm.send(body); screen = Screen.Chat }
                 Screen.Stats -> StatsScreen(vm, state) { screen = Screen.Chat }
                 Screen.Settings -> SettingsScreen(vm, state) { screen = Screen.Chat }
+                Screen.News -> NewsScreen(vm, state) { screen = Screen.Chat }
             }
         }
     }

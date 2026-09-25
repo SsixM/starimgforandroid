@@ -27,9 +27,11 @@ data class UsageLog(
     val usageSource: UsageSource = UsageSource.TELEMETRY
 )
 
+@kotlinx.serialization.Serializable
 data class SiteNews(
     val id: String, val status: String, val tag: String?, val tagLabel: String?, val tagColor: String?,
-    val title: String, val titleEn: String?, val text: String, val textEn: String?, val images: List<String>, val pinned: Boolean
+    val title: String, val titleEn: String?, val text: String, val textEn: String?, val images: List<String>, val pinned: Boolean,
+    val date: String? = null
 )
 
 data class NewsState(val id: String, val readAt: Long? = null, val dismissed: Boolean = false)
