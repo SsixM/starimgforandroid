@@ -33,7 +33,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.Button
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -105,7 +110,8 @@ private fun Navigation(vm: MainViewModel, state: ru.starimg.ai.ui.AppState) {
     var modelSheet by remember { mutableStateOf(false) }
     BackHandler(screen != Screen.Chat) { screen = Screen.Chat }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        AnimatedContent(screen, transitionSpec = {
+        Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) { AnimatedContent(screen, transitionSpec = {
             val forward = targetState != Screen.Chat
             if (forward) (slideInHorizontally(tween(280)) { -it / 4 } + fadeIn(tween(280))) togetherWith (slideOutHorizontally(tween(280)) { it / 5 } + fadeOut(tween(200)))
             else (slideInVertically(tween(280)) { it / 5 } + fadeIn(tween(280))) togetherWith (slideOutVertically(tween(240)) { it / 6 } + fadeOut(tween(200)))
@@ -119,6 +125,15 @@ private fun Navigation(vm: MainViewModel, state: ru.starimg.ai.ui.AppState) {
                 Screen.Settings -> SettingsScreen(vm, state) { screen = Screen.Chat }
                 Screen.News -> NewsScreen(vm, state) { screen = Screen.Chat }
             }
+        } }
+        if (screen in setOf(Screen.Chat, Screen.Chats, Screen.News, Screen.Library)) {
+            NavigationBar {
+                NavigationBarItem(selected = screen == Screen.Chat, onClick = { screen = Screen.Chat }, icon = { Icon(Icons.Default.AutoAwesome, "Чат") }, label = { Text("Чат") })
+                NavigationBarItem(selected = screen == Screen.Chats, onClick = { screen = Screen.Chats }, icon = { Icon(Icons.Default.History, "История") }, label = { Text("История") })
+                NavigationBarItem(selected = screen == Screen.News, onClick = { screen = Screen.News }, icon = { Icon(Icons.Default.Newspaper, "Новости") }, label = { Text("Новости") })
+                NavigationBarItem(selected = screen == Screen.Library, onClick = { screen = Screen.Library }, icon = { Icon(Icons.Default.MenuBook, "Библиотека") }, label = { Text("Библиотека") })
+            }
+        }
         }
     }
     if (modelSheet) ModelSheet(vm, state, onCompare = { modelSheet = false; screen = Screen.Models }) { modelSheet = false }

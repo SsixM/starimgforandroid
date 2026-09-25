@@ -196,6 +196,17 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
                     }
                 }
             }
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = StarDim.md, vertical = StarDim.xs),
+                shape = RoundedCornerShape(StarDim.radius), color = palette.raised
+            ) {
+                Column(Modifier.padding(horizontal = StarDim.md, vertical = StarDim.sm), verticalArrangement = Arrangement.spacedBy(StarDim.xxs)) {
+                    Text("Модель · ${model.name}", style = MaterialTheme.typography.labelMedium, color = palette.assistant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("Reasoning · ${state.reasoningMode.ifBlank { "выключен" }}", style = MaterialTheme.typography.labelSmall, color = palette.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val instructions = listOf(state.baseSystemPrompt, state.systemPrompt).count { it.isNotBlank() }
+                    Text("Инструкции · ${when (instructions) { 0 -> "нет"; 1 -> "активна 1"; else -> "активны $instructions" }}", style = MaterialTheme.typography.labelSmall, color = palette.faint)
+                }
+            }
             if (state.contextDropped > 0) {
                 Text(
                     "Ранние сообщения не отправлены: ${state.contextDropped}. Контекст обрезан по размеру.",
@@ -208,7 +219,7 @@ private fun ChatBody(vm: MainViewModel, state: AppState, onOpenChats: () -> Unit
             } else {
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(), state = scroll,
-                    contentPadding = PaddingValues(start = StarDim.lg, end = StarDim.lg, top = StarDim.md, bottom = 132.dp),
+                    contentPadding = PaddingValues(start = StarDim.lg, end = StarDim.lg, top = StarDim.md, bottom = 156.dp),
                     verticalArrangement = Arrangement.spacedBy(StarDim.lg)
                 ) {
                     itemsIndexed(vm.messages, key = { index, _ -> "$index-${vm.messages.size}" }) { index, message ->
@@ -364,11 +375,11 @@ private fun Composer(
                 else FilledIconButton({ if (pricey) confirm = true else send() }, enabled = canSend, modifier = Modifier.size(44.dp)) { Icon(Icons.Default.ArrowUpward, "Отправить") }
             }
         }
-        Text(
-            "${model.name} · вход ${formatCoefficient(model.pricing.inputCoefficient)} · выход ${formatCoefficient(model.pricing.outputCoefficient)} · примерно ${formatRubles(estimate).replace("₽", currency)}" + if (photos.isNotEmpty()) " · ${photos.size} фото" else "",
-            color = if (pricey) MaterialTheme.colorScheme.error else palette.faint,
-            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = StarDim.lg, top = StarDim.xs)
-        )
+        Column(Modifier.fillMaxWidth().padding(start = StarDim.lg, top = StarDim.xs, end = StarDim.sm)) {
+            Text("Предварительная оценка · около ${formatRubles(estimate).replace("₽", currency)}", color = palette.faint, style = MaterialTheme.typography.labelMedium)
+            Text("Расчёт по длине текста и тарифу модели; итог зависит от ответа. В статистику попадут только данные сервера." + if (photos.isNotEmpty()) " Фото: ${photos.size}." else "", color = palette.faint, style = MaterialTheme.typography.labelSmall)
+            Text("Вход ${formatCoefficient(model.pricing.inputCoefficient)} · выход ${formatCoefficient(model.pricing.outputCoefficient)}", color = palette.faint, style = MaterialTheme.typography.labelSmall)
+        }
     }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
