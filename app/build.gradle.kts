@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,12 +8,33 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val signingProperties = Properties().apply {
+    val file = rootProject.file("app/keystore.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
 android { namespace = "ru.starimg.ai"; compileSdk = 35
     defaultConfig { applicationId = "ru.starimg.ai"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1.0" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    signingConfigs {
+        if (signingProperties.containsKey("storeFile")) {
+            create("release") {
+                storeFile = rootProject.file("app/${signingProperties["storeFile"]}")
+                storePassword = signingProperties["storePassword"] as String
+                keyAlias = signingProperties["keyAlias"] as String
+                keyPassword = signingProperties["keyPassword"] as String
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (signingProperties.containsKey("storeFile")) signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
 }
 
 dependencies {

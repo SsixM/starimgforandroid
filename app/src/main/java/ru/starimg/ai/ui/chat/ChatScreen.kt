@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import ru.starimg.ai.data.model.AiModel
 import ru.starimg.ai.data.model.Catalog
+import ru.starimg.ai.data.model.ModelPricing
 import ru.starimg.ai.data.model.estimateRequestCost
 import ru.starimg.ai.data.model.formatCoefficient
 import ru.starimg.ai.data.model.formatRubles
