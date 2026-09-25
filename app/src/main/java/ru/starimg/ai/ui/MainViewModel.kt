@@ -125,22 +125,29 @@ class MainViewModel(app: Context) : ViewModel() {
     val selectedModel: AiModel? get() = model(snapshot.selectedModel)
     val selectedReasoningModes: List<String> get() = selectedModel?.confirmedReasoningParameters.orEmpty().sorted()
 
-    val assistantMessages get() = snapshot.chats.flatMap { it.messages }.filter { !it.user && !it.error }
+    private data class UsageEntry(val chat: ChatSession, val modelId: String, val timestamp: Long, val input: Long, val output: Long, val total: Long, val cost: Double, val available: Boolean, val attemptId: String, val requestId: String?, val source: ru.starimg.ai.data.model.UsageSource)
+    val assistantMessages: List<ChatMessage> get() = snapshot.chats.flatMap { it.messages }.filter { !it.user && !it.error }
+    private fun usageEntries(): List<UsageEntry> = snapshot.chats.flatMap { chat -> chat.messages.filter { !it.user && !it.error }.flatMap { message ->
+        (0 until message.versionCount).mapNotNull { index ->
+            val v = message.versionAt(index)
+            val entry = UsageEntry(chat, v?.modelId ?: message.modelId, v?.timestamp ?: message.timestamp, v?.inputTokens ?: message.inputTokens, v?.outputTokens ?: message.outputTokens, v?.totalTokens ?: message.totalTokens, v?.costRubles ?: message.costRubles, v?.usageAvailable ?: message.usageAvailable, v?.requestAttemptId ?: message.requestAttemptId, v?.serverRequestId ?: message.serverRequestId, v?.usageSource ?: message.usageSource)
+            if (entry.attemptId.isBlank()) null else entry
+        }
+    } }
 
     val totalUsage: TokenUsage
-        get() = assistantMessages.fold(TokenUsage()) { acc, message ->
-            val version = message.versionAt(message.activeVersion)
+        get() = usageEntries().filter { it.available }.fold(TokenUsage()) { acc, entry ->
             TokenUsage(
-                acc.input + (version?.inputTokens ?: message.inputTokens),
-                acc.output + (version?.outputTokens ?: message.outputTokens),
-                acc.reportedTotal + (version?.totalTokens ?: message.totalTokens)
+                acc.input + entry.input,
+                acc.output + entry.output,
+                acc.reportedTotal + entry.total
             )
         }
 
-    val totalCost: Double get() = assistantMessages.sumOf { it.versionAt(it.activeVersion)?.costRubles ?: it.costRubles }
+    val totalCost: Double get() = usageEntries().filter { it.available && it.source != ru.starimg.ai.data.model.UsageSource.ESTIMATE }.sumOf { it.cost }
 
-    fun costSince(from: Long): Double = assistantMessages.filter { (it.versionAt(it.activeVersion)?.timestamp ?: it.timestamp) >= from }.sumOf { it.versionAt(it.activeVersion)?.costRubles ?: it.costRubles }
-    fun tokensSince(from: Long): Long = assistantMessages.filter { (it.versionAt(it.activeVersion)?.timestamp ?: it.timestamp) >= from }.sumOf { it.versionAt(it.activeVersion)?.totalTokens ?: it.totalTokens }
+    fun costSince(from: Long): Double = usageEntries().filter { it.available && it.source != ru.starimg.ai.data.model.UsageSource.ESTIMATE && it.timestamp >= from }.sumOf { it.cost }
+    fun tokensSince(from: Long): Long = usageEntries().filter { it.available && it.timestamp >= from }.sumOf { it.total }
 
     fun finishOnboarding() { _state.update { it.copy(onboarded = true) }; store.onboarded = true }
 
@@ -240,7 +247,14 @@ class MainViewModel(app: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             _state.update { it.copy(telemetryLoading = true, telemetryError = null) }
             runCatching { api.loadTelemetry(now.endpoint, now.accessToken) }
-                .onSuccess { data -> _state.update { it.copy(balance = data.balance, usageLogs = data.logs, telemetryLoading = false) } }
+                .onSuccess { data ->
+                    val current = snapshot
+                    val claimed = mutableSetOf<String>()
+                    val logsById = data.logs.mapNotNull { log -> log.requestId?.let { it to log } }.toMap()
+                    val updatedChats = current.chats.map { chat -> chat.copy(messages = chat.messages.map { message -> if (message.user) message else message.withTelemetry(data.logs, logsById, claimed) }) }
+                    _state.update { it.copy(balance = data.balance, usageLogs = data.logs, telemetryLoading = false, chats = updatedChats) }
+                    updatedChats.forEach(::persist)
+                }
                 .onFailure { failure -> _state.update { it.copy(telemetryError = failure.message ?: "Не удалось получить баланс.", telemetryLoading = false) } }
         }
     }
@@ -422,7 +436,8 @@ class MainViewModel(app: Context) : ViewModel() {
     }
 
     fun resetStats() {
-        val cleared = snapshot.chats.map { chat -> chat.copy(messages = chat.messages.map { if (it.user) it else it.copy(inputTokens = 0, outputTokens = 0, totalTokens = 0, costRubles = 0.0, usageAvailable = false) }) }
+        fun ChatMessage.clearUsage() = copy(inputTokens = 0, outputTokens = 0, totalTokens = 0, costRubles = 0.0, usageAvailable = false, usageSource = ru.starimg.ai.data.model.UsageSource.UNKNOWN, versions = versions.map { it.copy(inputTokens = 0, outputTokens = 0, totalTokens = 0, costRubles = 0.0, usageAvailable = false, usageSource = ru.starimg.ai.data.model.UsageSource.UNKNOWN) })
+        val cleared = snapshot.chats.map { chat -> chat.copy(messages = chat.messages.map { if (it.user) it else it.clearUsage() }) }
         _state.update { it.copy(chats = cleared) }
         viewModelScope.launch(Dispatchers.IO) { store.replaceAllChats(cleared) }
     }
@@ -430,12 +445,8 @@ class MainViewModel(app: Context) : ViewModel() {
     suspend fun exportJson(): String = withContext(Dispatchers.IO) { store.exportJson() }
 
     fun exportCsv(): String = buildString {
-        append("chat,model,timestamp,input_tokens,output_tokens,total_tokens,cost_rub\n")
-        snapshot.chats.forEach { chat ->
-            chat.messages.filter { !it.user }.forEach { message ->
-                append("\"${chat.title.replace("\"", "'")}\",${message.modelId},${message.timestamp},${message.inputTokens},${message.outputTokens},${message.totalTokens},${message.costRubles}\n")
-            }
-        }
+        append("chat,model,timestamp,attempt_id,request_id,source,input_tokens,output_tokens,total_tokens,cost_rub\n")
+        usageEntries().forEach { e -> append(listOf(e.chat.title, e.modelId, e.timestamp.toString(), e.attemptId, e.requestId.orEmpty(), if (e.available) e.source.name else "UNKNOWN", if (e.available) e.input.toString() else "", if (e.available) e.output.toString() else "", if (e.available) e.total.toString() else "", if (e.available && e.source != ru.starimg.ai.data.model.UsageSource.ESTIMATE) e.cost.toString() else "").joinToString(",") { "\"${it.replace("\"", "\"\"")}\"" } + "\n") }
     }
 
     /**
@@ -482,14 +493,15 @@ class MainViewModel(app: Context) : ViewModel() {
                     }
                 }
                 val pricing = model(modelId)?.pricing ?: ModelPricing(1.0, 1.0)
-                val cost = calculateUsageCost(result.usage, pricing)
+                val cost = if (result.usageAvailable) calculateUsageCost(result.usage, pricing) else null
                 val reply = ChatMessage(
                     text = result.text.ifBlank { "Модель вернула пустой ответ." }, user = false,
                     inputTokens = result.usage.input, outputTokens = result.usage.output, totalTokens = result.usage.total,
                     coefficient = pricing.inputCoefficient, outputCoefficient = pricing.outputCoefficient,
-                    costRubles = if (result.usageAvailable) cost.rubles else 0.0,
+                    costRubles = cost?.rubles ?: 0.0,
                     modelId = modelId, timestamp = System.currentTimeMillis(), usageAvailable = result.usageAvailable,
                     requestAttemptId = result.requestAttemptId,
+                    serverRequestId = result.serverRequestId,
                     usageSource = if (result.usageAvailable) ru.starimg.ai.data.model.UsageSource.CHAT_RESPONSE else ru.starimg.ai.data.model.UsageSource.UNKNOWN
                 )
                 edit(id) { it.copy(messages = it.messages.dropLast(1) + reply.withBranch(branchFrom)) }
@@ -546,10 +558,24 @@ private fun ChatMessage.withBranch(previous: ChatMessage?): ChatMessage {
             version?.timestamp ?: previous.timestamp,
             version?.usageAvailable ?: previous.usageAvailable,
             version?.requestAttemptId ?: previous.requestAttemptId,
-            version?.usageSource ?: previous.usageSource
+            version?.usageSource ?: previous.usageSource,
+            version?.serverRequestId ?: previous.serverRequestId
         )
     }
     return copy(versions = older, activeVersion = older.size)
+}
+
+private fun ChatMessage.withTelemetry(logs: List<UsageLog>, logsById: Map<String, UsageLog>, claimed: MutableSet<String>): ChatMessage {
+    fun enrich(attempt: String, request: String?, model: String, input: Long, output: Long, total: Long, available: Boolean, source: ru.starimg.ai.data.model.UsageSource, timestamp: Long, cost: Double, coefficient: Double, outputCoefficient: Double, attemptFallback: Boolean): MessageVersion? {
+        if (source == ru.starimg.ai.data.model.UsageSource.CHAT_RESPONSE && available) return null
+        val log = request?.let(logsById::get)?.takeIf { claimed.add(it.requestId ?: "") }
+            ?: if (!attemptFallback) null else logs.filter { it.requestId != null && it.requestId !in claimed && it.model == model && (timestamp == 0L || kotlin.math.abs(timestamp - runCatching { java.time.Instant.parse(it.createdAt).toEpochMilli() }.getOrDefault(Long.MIN_VALUE)) < 120_000) }.singleOrNull()?.also { claimed.add(it.requestId!!) }
+            ?: return null
+        return MessageVersion("", log.inputTokens, log.outputTokens, log.inputTokens + log.outputTokens, coefficient, outputCoefficient, calculateUsageCost(TokenUsage(log.inputTokens, log.outputTokens, cachedInput = log.cachedTokens), ModelPricing(coefficient, outputCoefficient)).rubles, model, timestamp, true, attempt, ru.starimg.ai.data.model.UsageSource.TELEMETRY, log.requestId)
+    }
+    val enrichedVersions = versions.map { v -> enrich(v.requestAttemptId, v.serverRequestId, v.modelId, v.inputTokens, v.outputTokens, v.totalTokens, v.usageAvailable, v.usageSource, v.timestamp, v.costRubles, v.coefficient, v.outputCoefficient, true)?.let { v.copy(inputTokens = it.inputTokens, outputTokens = it.outputTokens, totalTokens = it.totalTokens, costRubles = it.costRubles, usageAvailable = true, usageSource = it.usageSource, serverRequestId = it.serverRequestId) } ?: v }
+    val enrichedSelf = enrich(requestAttemptId, serverRequestId, modelId, inputTokens, outputTokens, totalTokens, usageAvailable, usageSource, timestamp, costRubles, coefficient, outputCoefficient, true)
+    return copy(versions = enrichedVersions, inputTokens = enrichedSelf?.inputTokens ?: inputTokens, outputTokens = enrichedSelf?.outputTokens ?: outputTokens, totalTokens = enrichedSelf?.totalTokens ?: totalTokens, costRubles = enrichedSelf?.costRubles ?: costRubles, usageAvailable = enrichedSelf?.usageAvailable ?: usageAvailable, usageSource = enrichedSelf?.usageSource ?: usageSource, serverRequestId = enrichedSelf?.serverRequestId ?: serverRequestId)
 }
 
 fun startOfDay(): Long = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis

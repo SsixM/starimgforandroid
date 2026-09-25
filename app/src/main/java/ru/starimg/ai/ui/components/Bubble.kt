@@ -210,9 +210,8 @@ private fun Footer(message: ChatMessage, version: MessageVersion?, copy: () -> U
         val caption = if (available && tokens > 0) {
             val name = Catalog.model(modelId)?.name ?: modelId
             val equivalent = (input * coefficient + output * outputCoefficient).roundToLong()
-            "${formatTokens(equivalent)} В· ${formatRubles(cost)}" + if (name.isNotBlank()) " В· $name" else ""
-        } else "РўРѕРєРµРЅС‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹ РґР»СЏ СЌС‚РѕРіРѕ Р·Р°РїСЂРѕСЃР°"
-        Text(caption, color = palette.faint, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+            "${formatTokens(equivalent)} · ${formatRubles(cost)} · ${(version?.usageSource ?: message.usageSource).name}" + if (name.isNotBlank()) " · $name" else ""
+        } else "Нет данных · ожидает сверки"
         SmallIcon(Icons.Default.ContentCopy, "РљРѕРїРёСЂРѕРІР°С‚СЊ", copy)
         if (onRetry != null) SmallIcon(Icons.Default.Refresh, "РџРµСЂРµРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ", onRetry)
         SmallIcon(Icons.Default.Share, "РџРѕРґРµР»РёС‚СЊСЃСЏ", onShare)
@@ -245,19 +244,18 @@ private fun UsageDialog(message: ChatMessage, version: MessageVersion?, close: (
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(StarDim.xs)) {
                 Detail("РњРѕРґРµР»СЊ", model?.name ?: modelId.ifBlank { "вЂ”" })
-                Detail("Р’СЂРµРјСЏ", time)
-                Detail("Р’С…РѕРґ", formatTokens(version?.inputTokens ?: message.inputTokens))
-                Detail("Р’С‹С…РѕРґ", formatTokens(version?.outputTokens ?: message.outputTokens))
-                Detail("Р’СЃРµРіРѕ", formatTokens(version?.totalTokens ?: message.totalTokens))
-                Detail("РљРѕСЌС„С„РёС†РёРµРЅС‚", "РІС…РѕРґ Г—${version?.coefficient ?: message.coefficient} В· РІС‹С…РѕРґ Г—${version?.outputCoefficient ?: message.outputCoefficient}")
-                Detail("РЎС‚РѕРёРјРѕСЃС‚СЊ", formatRubles(version?.costRubles ?: message.costRubles))
-                if (message.versionCount > 1) Detail("Р’РµСЂСЃРёСЏ", "${message.activeVersion + 1} РёР· ${message.versionCount}")
-                Text("РўР°СЂРёС„: 1 000 000 СЌРєРІРёРІР°Р»РµРЅС‚РЅС‹С… С‚РѕРєРµРЅРѕРІ = 4 в‚Ѕ", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                val available = version?.usageAvailable ?: message.usageAvailable
+                Detail("Источник", (version?.usageSource ?: message.usageSource).name)
+                Detail("Вход", if (available) formatTokens(version?.inputTokens ?: message.inputTokens) else "Нет данных / ожидает сверки")
+                Detail("Выход", if (available) formatTokens(version?.outputTokens ?: message.outputTokens) else "Нет данных / ожидает сверки")
+                Detail("Стоимость", if (available) formatRubles(version?.costRubles ?: message.costRubles) else "Нет данных")
+                Detail("Всего", if (available) formatTokens(version?.totalTokens ?: message.totalTokens) else "Нет данных / ожидает сверки")
+                if (message.versionCount > 1) Detail("Версия", "${message.activeVersion + 1} из ${message.versionCount}")
+                Text("Тариф: 1 000 000 эквивалентных токенов = 4 ?", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
             }
         },
-        confirmButton = { TextButton(close) { Text("Р—Р°РєСЂС‹С‚СЊ") } }
-    )
-}
+        confirmButton = { TextButton(close) { Text("Закрыть") } }
+                Detail("Стоимость", if (available) formatRubles(version?.costRubles ?: message.costRubles) else "Нет данных")
 
 @Composable
 private fun Detail(label: String, value: String) {

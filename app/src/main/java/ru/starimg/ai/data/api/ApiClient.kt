@@ -88,14 +88,15 @@ class ApiClient {
             call.execute().use { response ->
                 if (!response.isSuccessful) fail(response)
                 return if (response.header("content-type").orEmpty().contains("text/event-stream")) {
-                    readStream(response, onDelta)
+                    readStream(response, attemptId, onDelta)
                 } else {
                     // A proxy that ignores `stream` answers with one JSON document.
                     val raw = response.body?.string().orEmpty()
                     val root = runCatching { Json.parseToJsonElement(raw).jsonObject }.getOrNull()
                     val text = parseReplyText(root, raw)
                     if (text.isNotEmpty()) onDelta(text)
-                    ApiResult(text, parseUsage(root), parseUsage(root).available, attemptId, root?.requestId())
+                    val usage = parseUsage(root)
+                    ApiResult(text, usage, usage.available, attemptId, root?.requestId())
                 }
             }
         } finally {
@@ -104,13 +105,12 @@ class ApiClient {
     }
 
     /** Walks the SSE events. Anthropic sends deltas; OpenAI sends cumulative chunks. */
-    private fun readStream(response: Response, onDelta: (String) -> Unit): ApiResult {
+    private fun readStream(response: Response, attemptId: String, onDelta: (String) -> Unit): ApiResult {
         val source = response.body?.source() ?: error("Пустой ответ сервера.")
         val text = StringBuilder()
         var seen = ""
         var usage = TokenUsage()
         var requestId: String? = null
-        val attemptId = UUID.randomUUID().toString()
         while (!source.exhausted()) {
             val line = source.readUtf8Line() ?: break
             if (!line.startsWith("data:")) continue

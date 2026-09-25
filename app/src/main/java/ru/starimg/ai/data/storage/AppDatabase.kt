@@ -57,7 +57,8 @@ data class MessageEntity(
     val versions: String = "",
     val activeVersion: Int = 0,
     val requestAttemptId: String = "",
-    val usageSource: String = "UNKNOWN"
+    val usageSource: String = "UNKNOWN",
+    val serverRequestId: String? = null
 )
 
 @Entity(tableName = "prompts")
@@ -178,7 +179,7 @@ interface NewsDao {
     suspend fun replaceNews(items: List<NewsEntity>) { clearNews(); insertNews(items) }
 }
 
-@Database(entities = [ChatEntity::class, MessageEntity::class, PromptEntity::class, AgentEntity::class, NewsEntity::class, ModelCapabilityEntity::class], version = 3, exportSchema = false)
+@Database(entities = [ChatEntity::class, MessageEntity::class, PromptEntity::class, AgentEntity::class, NewsEntity::class, ModelCapabilityEntity::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chats(): ChatDao
     abstract fun library(): LibraryDao
@@ -206,10 +207,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS model_capabilities (id TEXT NOT NULL PRIMARY KEY, payload TEXT NOT NULL, observedAt INTEGER NOT NULL)")
             }
         }
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE messages ADD COLUMN serverRequestId TEXT")
+                }
+        }
 
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "starchat.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }
@@ -227,7 +233,8 @@ fun MessageEntity.toMessage(): ChatMessage {
     return ChatMessage(
         text, user, image, mime, photos, error, inputTokens, outputTokens, totalTokens,
         coefficient, outputCoefficient, costRubles, modelId, timestamp, usageAvailable,
-        requestAttemptId, runCatching { ru.starimg.ai.data.model.UsageSource.valueOf(usageSource) }.getOrDefault(ru.starimg.ai.data.model.UsageSource.UNKNOWN), history, activeVersion
+        requestAttemptId, runCatching { ru.starimg.ai.data.model.UsageSource.valueOf(usageSource) }.getOrDefault(ru.starimg.ai.data.model.UsageSource.UNKNOWN), history, activeVersion,
+        serverRequestId = serverRequestId
     )
 }
 
@@ -237,7 +244,7 @@ fun ChatMessage.toEntity(chatId: String, position: Int): MessageEntity {
         chatId, position, text, user, photos.firstOrNull()?.data, photos.firstOrNull()?.mime ?: mime, error,
         inputTokens, outputTokens, totalTokens, coefficient, outputCoefficient, costRubles, modelId, timestamp,
         usageAvailable, stored.encodeToString(photos), stored.encodeToString(versions), activeVersion,
-        requestAttemptId, usageSource.name
+        requestAttemptId, usageSource.name, serverRequestId
     )
 }
 

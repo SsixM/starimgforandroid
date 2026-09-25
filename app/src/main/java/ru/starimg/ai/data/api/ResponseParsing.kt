@@ -18,11 +18,12 @@ import java.io.IOException
 
 /** Reads either Anthropic or OpenAI usage shapes. Missing usage is an empty [TokenUsage]. */
 fun parseUsage(root: JsonObject?): TokenUsage {
-    val usageJson = root?.get("usage")?.jsonObject ?: return TokenUsage()
+    val usageJson = root?.let { it["usage"] ?: it["message"]?.jsonObject?.get("usage") }?.let { runCatching { it.jsonObject }.getOrNull() } ?: return TokenUsage()
     return TokenUsage(
         input = usageJson.longValue("input_tokens", "prompt_tokens", "inputTokenCount") ?: 0,
         output = usageJson.longValue("output_tokens", "completion_tokens", "outputTokenCount") ?: 0,
-        reportedTotal = usageJson.longValue("total_tokens", "totalTokenCount") ?: 0
+        reportedTotal = usageJson.longValue("total_tokens", "totalTokenCount") ?: 0,
+        cachedInput = usageJson.longValue("cached_input_tokens", "cached_tokens", "cache_read_input_tokens", "cachedInputTokens") ?: 0
     )
 }
 
@@ -59,7 +60,7 @@ fun parseTelemetry(raw: String): Telemetry {
 
 private fun JsonObject.long(name: String): Long = this[name]?.jsonPrimitive?.longOrNull ?: this[name]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
 private fun JsonObject.str(name: String): String = this[name]?.jsonPrimitive?.contentOrNull.orEmpty()
-private fun JsonObject.requestId(): String? = listOf("request_id", "requestId", "id").firstNotNullOfOrNull { this[it]?.jsonPrimitive?.contentOrNull }
+private fun JsonObject.requestId(): String? = listOf("request_id", "requestId", "request-id").firstNotNullOfOrNull { this[it]?.jsonPrimitive?.contentOrNull }
 
 /**
  * Every reply shape the proxies in front of this app have been seen to return:

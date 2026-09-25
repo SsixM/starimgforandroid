@@ -51,6 +51,7 @@ data class ChatMessage(
     val timestamp: Long = 0L,
     val usageAvailable: Boolean = true,
     val requestAttemptId: String = "",
+    val serverRequestId: String? = null,
     val usageSource: UsageSource = if (usageAvailable) UsageSource.CHAT_RESPONSE else UsageSource.UNKNOWN,
     /**
      * Earlier answers for the same turn, newest last. Only assistant messages carry them.
@@ -89,6 +90,7 @@ data class MessageVersion(
     val timestamp: Long = 0L,
     val usageAvailable: Boolean = true,
     val requestAttemptId: String = "",
+    val serverRequestId: String? = null,
     val usageSource: UsageSource = if (usageAvailable) UsageSource.CHAT_RESPONSE else UsageSource.UNKNOWN
 )
 
@@ -117,6 +119,7 @@ data class TokenUsage(
     val input: Long = 0,
     val output: Long = 0,
     val reportedTotal: Long = 0,
+    val cachedInput: Long = 0,
     val estimatedInput: Long? = null,
     val estimatedOutput: Long? = null
 ) {
